@@ -1,19 +1,16 @@
 # Librería Cultural "El Saber" — Diseño e Implementación de Base de Datos en PostgreSQL
 
-Solución de base de datos relacional desarrollada en **PostgreSQL** para **La Librería Cultural "El Saber"**, diseñada para integrar la gestión de inventario, ventas al público, compras a proveedores nacionales e internacionales, sistema de préstamos bibliotecarios (a domicilio y en sala de lectura), control de devoluciones y recomendaciones personalizadas para sus lectores.
+Solución de base de datos relacional desarrollada en **PostgreSQL** para **La Librería Cultural "El Saber"**, diseñada para integrar la gestión de inventario, ventas al público, compras a proveedores nacionales e internacionales, sistema de préstamos bibliotecarios (a domicilio y en sala de lectura), control de devoluciones, recomendaciones personalizadas para sus lectores, optimización de almacenamiento, respaldos automatizados y seguridad basada en roles con encriptación.
 
 ## 👥 Integrantes del Grupo
 
 - **Jorge Meléndez** — *MC25066*
-- **Integrante 2** — *CARNET*
-- **Integrante 3** — *CARNET*
-- **Integrante 4** — *CARNET*
 
 ---
 
 ## Descripción y Requerimientos Funcionales
 
-El modelo responde integralmente a los requerimientos del establecimiento:
+El modelo responde integralmente a los requerimientos operativos, de mantenibilidad y seguridad del establecimiento:
 
 1. **Gestión de Inventario de Libros (`libro`, `editorial`, `genero`, `autor`, `libro_autor`):** Registro del catálogo con ISBN, título, año de publicación, múltiples autores, editorial, género, precio de venta y control separado de existencias para venta (`stock_venta`) y para biblioteca (`stock_biblioteca`).
 2. **Proceso de Ventas al Público (`venta`, `detalle_venta`):** Registro de ventas con fecha, cliente (opcional si no está registrado), vendedor (`empleado`), método de pago, detalle de libros, cantidades y precio unitario histórico.
@@ -21,19 +18,30 @@ El modelo responde integralmente a los requerimientos del establecimiento:
 4. **Sistema de Préstamos de Biblioteca (`prestamo`, `detalle_prestamo`, `multa`):** Registro de préstamos a domicilio y en sala de lectura (`domicilio`, `sala_lectura`), fechas de salida y devolución, estados (`activo`, `devuelto`, `vencido`) y gestión de multas por retraso (`pendiente`, `pagada`, `exonerada`).
 5. **Registro de Clientes, Socios y Recomendaciones (`cliente`, `membresia_socio`, `preferencia_cliente`):** Mantenimiento de clientes ocasionales, frecuentes y socios con carnet de biblioteca, historial completo de compras y préstamos, y preferencias de lectura por género.
 6. **Control de Proveedores (`proveedor`):** Registro de editoriales y distribuidores (nacionales e internacionales), datos de contacto, condiciones de pago e historial de órdenes de compra.
-7. **Reportes de Gestión (Vistas SQL):** Generación de reportes de libros más vendidos, libros más prestados y recomendaciones personalizadas.
+7. **Reportes de Gestión (Vistas SQL):** Generación de reportes de libros más vendidos, libros más prestados, recomendaciones personalizadas y vistas enmascaradas de clientes.
 8. **Gestión de Devoluciones (`devolucion_cliente`, `detalle_devolucion_cliente`, `devolucion_proveedor`, `detalle_devolucion_proveedor`):** Registro de devoluciones de clientes (con reingreso al inventario si el libro está en buen estado) y devoluciones a proveedores por defectos de fábrica o transporte.
+9. **Espacio en Disco, Bitácora y Mantenibilidad (`04_espacio_indices_bitacora.sql`):** Optimización mediante `FILLFACTOR`, índices parciales/compuestos/de expresión/GIN (`pg_trgm`), particionamiento declarativo por rango (`auditoria.bitacora_auditoria` y `auditoria.venta_historica`), monitoreo y estrategia automatizada de respaldos y restauración.
+10. **Seguridad y Encriptación (`05_seguridad_roles_encriptacion.sql`):** Control de acceso basado en roles (RBAC) alineado a los cargos del personal, segregación de funciones para auditoría y respaldos (`pg_read_all_data`), autenticación `scram-sha-256` sobre TLS/SSL y cifrado de datos sensibles con `pgcrypto` (AES-256 y Bcrypt).
 
 ---
 
 ## Estructura del Repositorio
 
 ```text
-├── sql/
-│   ├── 01_crear_tablas.sql        # DDL: 21 tablas, claves primarias, foráneas, CHECKs e índices
-│   ├── 02_datos_prueba.sql        # DML: Datos de prueba
-│   └── 03_triggers_y_vistas.sql   # PL/pgSQL: Triggers de inventario y vistas de reportes
-└── README.md                      # Documentación general y diagrama ER
+├── sql-scripts/
+│   ├── 01_crear_tablas.sql                  # DDL: 21 tablas, PKs, FKs, CHECKs e índices base
+│   ├── 02_datos_prueba.sql                  # DML: Datos de prueba (mín. 10 registros por tabla)
+│   ├── 03_triggers_y_vistas.sql             # PL/pgSQL: Triggers de inventario y vistas de reportes
+│   ├── 04_espacio_indices_bitacora.sql      # Optimización de disco, índices avanzados, particiones y bitácora
+│   └── 05_seguridad_roles_encriptacion.sql  # Políticas RBAC, usuarios, segregación y cifrado (pgcrypto)
+├── scripts/
+│   ├── backup_libreria.sh                   # Respaldo automático lógico, roles y configuración (Linux/macOS)
+│   ├── backup_libreria.ps1                  # Respaldo automático programado (Windows PowerShell)
+│   └── restauracion_libreria.sh             # Script de restauración controlada y verificación
+├── docs/
+│   └── plan_mantenimiento_y_seguridad.md    # Plan de crecimiento, mantenimiento, monitoreo, PITR y seguridad
+├── diagrama-er.md                           # Modelo Entidad-Relación
+└── README.md                                # Documentación general del proyecto
 ```
 
 ---
@@ -46,7 +54,7 @@ Revisa el [Diagrama ER](diagrama-er.md).
 
 ## Arquitectura de Tablas (Tercera Forma Normal - 3FN)
 
-El esquema está compuesto por **21 tablas normalizadas** distribuidas en 6 módulos funcionales:
+El esquema operativo está compuesto por **21 tablas normalizadas** distribuidas en 6 módulos funcionales (más el esquema aislado `auditoria` para trazabilidad e histórico particionado):
 
 | Módulo | Tablas |
 | :--- | :--- |
@@ -56,6 +64,7 @@ El esquema está compuesto por **21 tablas normalizadas** distribuidas en 6 mód
 | **Ventas y Compras** | `venta`, `detalle_venta`, `orden_compra`, `detalle_orden_compra` |
 | **Préstamos y Multas** | `prestamo`, `detalle_prestamo`, `multa` |
 | **Gestión de Devoluciones** | `devolucion_cliente`, `detalle_devolucion_cliente`, `devolucion_proveedor`, `detalle_devolucion_proveedor` |
+| **Auditoría e Histórico (Particionado)** | `auditoria.bitacora_auditoria`, `auditoria.venta_historica` |
 
 ---
 
@@ -91,39 +100,97 @@ El esquema está compuesto por **21 tablas normalizadas** distribuidas en 6 mód
 
 ## Requisitos Previos
 
-- **PostgreSQL** versión 12 o superior.
+- **PostgreSQL** versión **14 o superior** (recomendado **PostgreSQL 16/17** para compatibilidad completa con `pg_read_all_data`, compresión `zstd` y copias incrementales).
+- Extensiones estándar incluidas en PostgreSQL (`contrib`): **`pg_trgm`** y **`pgcrypto`** (opcional: `pgaudit` para auditoría a nivel de logs del servidor).
 - **pgAdmin 4** (interfaz gráfica) o cliente de línea de comandos **`psql`**.
 
 ---
 
 ## Instalación y Ejecución
 
-> **Importante:** Ejecutar los scripts en orden estricto (`01` $\rightarrow$ `02` $\rightarrow$ `03`) para que la carga inicial de datos históricos no dispare doblemente los triggers sobre el stock inicial.
+> **Importante:** Ejecutar los scripts en orden estricto (`01` $\rightarrow$ `02` $\rightarrow$ `03` $\rightarrow$ `04` $\rightarrow$ `05`) para que la carga inicial de datos históricos no dispare doblemente los triggers de inventario ni sature la bitácora de auditoría con datos semilla.
 
 ### Opción A: Usando pgAdmin 4
 1. Abrir **pgAdmin 4** y conectarse al servidor PostgreSQL.
-2. Hacer clic derecho en **Databases** $\rightarrow$ **Create** $\rightarrow$ **Database...**, asignar el nombre `libreria-cultural` y guardar.
-3. Hacer clic derecho sobre `libreria-cultural` $\rightarrow$ **Query Tool**.
+2. Hacer clic derecho en **Databases** $\rightarrow$ **Create** $\rightarrow$ **Database...**, asignar el nombre `libreria_cultural` (usando plantilla `template0` en la pestaña *Definition*) y guardar.
+3. Hacer clic derecho sobre `libreria_cultural` $\rightarrow$ **Query Tool**.
 4. Abrir y ejecutar los scripts en el siguiente orden:
-   1. `sql/01_crear_tablas.sql`
-   2. `sql/02_datos_prueba.sql`
-   3. `sql/03_triggers_y_vistas.sql`
+   1. `sql-scripts/01_crear_tablas.sql`
+   2. `sql-scripts/02_datos_prueba.sql`
+   3. `sql-scripts/03_triggers_y_vistas.sql`
+   4. `sql-scripts/04_espacio_indices_bitacora.sql`
+   5. `sql-scripts/05_seguridad_roles_encriptacion.sql`
 
 ### Opción B: Usando la terminal (`psql`)
 ```bash
-createdb -U postgres libreria-cultural
-psql -U postgres -d libreria-cultural -f sql/01_crear_tablas.sql
-psql -U postgres -d libreria-cultural -f sql/02_datos_prueba.sql
-psql -U postgres -d libreria-cultural -f sql/03_triggers_y_vistas.sql
+createdb -U postgres -T template0 libreria_cultural
+psql -U postgres --set ON_ERROR_STOP=on -d libreria_cultural -f sql-scripts/01_crear_tablas.sql
+psql -U postgres --set ON_ERROR_STOP=on -d libreria_cultural -f sql-scripts/02_datos_prueba.sql
+psql -U postgres --set ON_ERROR_STOP=on -d libreria_cultural -f sql-scripts/03_triggers_y_vistas.sql
+psql -U postgres --set ON_ERROR_STOP=on -d libreria_cultural -f sql-scripts/04_espacio_indices_bitacora.sql
+psql -U postgres --set ON_ERROR_STOP=on -d libreria_cultural -f sql-scripts/05_seguridad_roles_encriptacion.sql
 ```
 
 ---
 
 ## ⚡ Automatización (Triggers) y Vistas de Reportes
 
-### Triggers Implementados (`03_triggers_y_vistas.sql`)
+### Triggers de Negocio (`03_triggers_y_vistas.sql`)
 - `trg_orden_compra_recibida`: Suma automáticamente los ejemplares recibidos a `stock_venta` o `stock_biblioteca` cuando una orden pasa a estado `'recibida'`.
 - `trg_venta_descontar_stock`: Verifica disponibilidad en `stock_venta` y descuenta las unidades vendidas al registrar cada línea en `detalle_venta`.
 - `trg_prestamo_stock`: Descuenta ejemplares de `stock_biblioteca` al registrar un préstamo y los reintegra automáticamente cuando el ítem pasa a estado `'devuelto'`.
 - `trg_devolucion_cliente_stock`: Reingresa a `stock_venta` los ejemplares devueltos por clientes cuando `reingresa_inventario = TRUE`.
 - `trg_devolucion_proveedor_stock`: Descuenta de `stock_venta` los ejemplares defectuosos devueltos al proveedor.
+
+### Triggers y Vistas de Auditoría / Seguridad (`04` y `05`)
+- `trg_audit_libro`, `trg_audit_venta`, `trg_audit_multa`, `trg_audit_orden_compra`, `trg_audit_empleado`: Registran automáticamente en `auditoria.bitacora_auditoria` el `id_transaccion`, usuario, IP, aplicación, valores anteriores (`JSONB`) y nuevos (`JSONB`).
+- `trg_proteger_bitacora`: Bloquea cualquier intento de `UPDATE` o `DELETE` sobre `auditoria.bitacora_auditoria` para preservar la integridad de las trazas.
+- `vw_clientes_enmascarados`: Expone información de clientes con enmascaramiento parcial de `email`, `telefono` y `direccion` según el rol y la llave de sesión activa.
+
+---
+
+## 💾 Espacio en Disco, Mantenibilidad y Estrategia de Backup
+
+Para garantizar un crecimiento controlado y recuperación ante fallos, el proyecto incorpora las siguientes estrategias (detalladas en [`docs/plan_mantenimiento_y_seguridad.md`](docs/plan_mantenimiento_y_seguridad.md)):
+
+### 1. Uso Eficiente del Espacio en Disco (`04_espacio_indices_bitacora.sql`)
+- **Control de Bloat (`FILLFACTOR`):** Configuración de `fillfactor = 85` en `libro` y `90` en `prestamo` y `multa` para favorecer *HOT Updates* bajo la arquitectura MVCC.
+- **Índices Especializados:** Reemplazo de índices completos de baja cardinalidad por **índices parciales** (`WHERE estado = 'pendiente'`, `WHERE stock_venta > 0`, etc.), **índices compuestos** (`(id_cliente, fecha_venta DESC)`), **índices de expresión** (`LOWER(titulo)`, `LOWER(apellido), LOWER(nombre)`) e **índices GIN con trigramas** (`pg_trgm`).
+- **Particionamiento Declarativo (`RANGE`):** `auditoria.bitacora_auditoria` y `auditoria.venta_historica` están particionadas por año, permitiendo archivar datos antiguos con `DETACH PARTITION` sin generar fragmentación ni requerir `VACUUM FULL`.
+- **Reorganización Periódica:** Mantenimiento preventivo con `autovacuum`, `ANALYZE` y reconstrucción sin pérdida de disponibilidad mediante `REINDEX (VERBOSE)` / `REINDEX ... CONCURRENTLY`.
+
+### 2. Estrategia de Backup y Restauración (`scripts/`)
+Se sigue una estrategia híbrida alineada a la regla **3-2-1** sobre la base de datos **`libreria_cultural`**:
+
+| Tipo de Respaldo | Herramienta / Script | Frecuencia | Alcance |
+| :--- | :--- | :--- | :--- |
+| **Lógico comprimido** | `scripts/backup_libreria.sh` (Linux/macOS)<br>`scripts/backup_libreria.ps1` (Windows) | Diario (02:00 AM vía `cron` / Task Scheduler) | Base `libreria_cultural` en formato custom (`pg_dump -Fc --compress=zstd`) ejecutado con el usuario de mínimo privilegio `usr_respaldo` (`pg_read_all_data`). |
+| **Roles y globales** | `pg_dumpall --globals-only` (incluido en los scripts) | Diario | Roles, membresías y privilegios globales del clúster. |
+| **Configuración del servidor** | Copia de `postgresql.conf`, `pg_hba.conf` (incluida en los scripts) | Diario / ante cambios | Archivos de configuración no cubiertos por `pg_dumpall` ni WAL. |
+| **Físico + PITR (Producción)** | `pg_basebackup` + archivado continuo WAL (`archive_mode = on`) | Semanal (base) + continuo (WAL) / incremental PG 17 | Recuperación en un momento dado (*Point-In-Time Recovery*) con pérdida mínima de datos. |
+
+#### Ejecución de Respaldo y Restauración
+```bash
+# Ejecutar respaldo manual (Linux/macOS)
+chmod +x scripts/backup_libreria.sh scripts/restauracion_libreria.sh
+./scripts/backup_libreria.sh
+
+# Restaurar respaldo lógico sobre una base limpia creada con template0
+./scripts/restauracion_libreria.sh /var/backups/postgresql/libreria_cultural/libreria_cultural_YYYYMMDD_HHMMSS.dump
+```
+> En Windows, programar `scripts/backup_libreria.ps1` mediante el **Programador de tareas** (*Task Scheduler*).
+
+---
+
+## 🔒 Seguridad, Roles y Encriptación (`05_seguridad_roles_encriptacion.sql`)
+
+- **Control de Acceso Basado en Roles (RBAC):** Se revoca todo acceso por defecto al rol `PUBLIC` y se asignan permisos estrictos por función:
+  - `rol_administrador` (`usr_admin_saber`): Gestión DDL, mantenimiento y operación completa (sin permiso de alterar `auditoria.bitacora_auditoria`).
+  - `rol_bodeguero` (`usr_bodeguero_1`): Proveedores, órdenes de compra, devoluciones a proveedor y actualización de stock al recibir pedidos.
+  - `rol_vendedor` (`usr_vendedor_1`): Registro de ventas, clientes y devoluciones de clientes (sin permiso de `DELETE` sobre ventas históricas).
+  - `rol_bibliotecario` (`usr_biblio_1`): Membresías de socios, préstamos, devoluciones de biblioteca y cobro de multas.
+  - `rol_auditor` (`usr_auditor_1`): Segregación de funciones; acceso de solo lectura (`SELECT`) sobre negocio y bitácoras.
+  - `usr_respaldo`: Usuario exclusivo de backups con el rol predefinido `pg_read_all_data` (sin privilegios de superusuario).
+- **Encriptación:**
+  - **En tránsito:** Conexiones cifradas obligatorias mediante **SSL/TLS (`hostssl`)** y autenticación **`scram-sha-256`** en `pg_hba.conf`.
+  - **En columnas sensibles (`pgcrypto`):** Contraseñas de empleados protegidas con *hash* **Bcrypt** (`crypt` + `gen_salt('bf')`) y datos de contacto de clientes (`telefono_cifrado`, `direccion_cifrada`) cifrados simétricamente con **AES-256** (`pgp_sym_encrypt` / `pgp_sym_decrypt`) usando llave de sesión (`app.clave_cifrado`).
